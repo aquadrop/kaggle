@@ -2,6 +2,7 @@ import sys
 import os
 import gensim
 import numpy as np
+import fastText
 
 loop_word = 0
 dim_shrink = 1
@@ -9,10 +10,10 @@ sentence_vector_dict = {}
 
 path = '/opt/word2vec/benebot_vector/word2vec.bin'
 
-PAD = 'PAD'
-EMPTY = "PAD"
+PAD = '<PAD>'
+EMPTY = "<PAD>"
 NONE = ""
-UNK = 'UNK'
+UNK = '<UNK>'
 
 SEPERATOR = ","
 
@@ -24,6 +25,8 @@ class Singleton(type):
             cls._instances[cls] = super(
                 Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
+
+
 
 class BenebotVector(metaclass=Singleton):
 

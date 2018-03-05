@@ -11,9 +11,9 @@ FASTTEXT_URL_M_POST = 'http://localhost:11425/fasttext/maxsim'
 # print('load model')
 # model = FastText.load_fasttext_format('/opt/fasttext/model/test.bin')
 
-ft_model = ft.load_model('/media/deep/DATA1/share/fasttext/wiki-news-300d-1M-subword.vec')
-def ff_embedding(word):
-    vector = ft_model[word]
+ft_model = ft.load_model('/media/deep/DATA1/share/wiki.en/wiki.en.bin')
+def ft_embedding(word):
+    vector = ft_model.get_word_vector(word)
     return vector
 
 def mlt_ff_embedding(q1, q2):
@@ -67,3 +67,4 @@ if __name__ == '__main__':
     q1='我能,用,支付宝,付款,吗'
     q2=["xxxxx"]
     print(ff_embedding('hello'))
+    print(ff_embedding('科沃斯'))

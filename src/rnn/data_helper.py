@@ -20,7 +20,8 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 
-import utils.embedding.vector_helper as vector_helper
+# import utils.embedding.vector_helper as vector_helper
+import utils.embedding.embedding_util as embedding_util
 import utils.query_util as query_util
 
 # file path
@@ -299,7 +300,7 @@ def parse_dialogs_per_response(sentences, f, candid_dic, char=1, plain=False):
         _id_ = row['id']
         u = query_util.tokenize(u, char=8)
         # r = query_util.tokenize(r, char=char)
-        sentences.add(vector_helper.SEPERATOR.join(u))
+        sentences.add(",".join(u))
         # sentences.add(vector_helper.SEPERATOR.join(r))
 
         # print(u)
@@ -308,8 +309,8 @@ def parse_dialogs_per_response(sentences, f, candid_dic, char=1, plain=False):
         data.append((context[:], u[:], a))
 
     # print(data)
-    sentences.add(vector_helper.EMPTY)
-    sentences.add(vector_helper.PAD)
+    sentences.add("<PAD>")
+    # sentences.add(vector_helper.PAD)
     random.shuffle(data)
     return data
 
@@ -365,7 +366,7 @@ def load_raw_data(config):
         #     inp = [[config.EMPTY]]
         # inputs.append(inp)
         if len(question) == 0:
-            question = [vector_helper.EMPTY]
+            question = ["<PAD>"]
         questions.append(question)
         answers.append(answer)
         # relevant_labels.append([0])
@@ -430,7 +431,7 @@ def vectorize_data(data, metadata):
 
     questions_embeddings = []
     for question in questions:
-        question = vector_helper.SEPERATOR.join(question)
+        question = ",".join(question)
         questions_embeddings.append(sentences_embedding[question])
     questions_embeddings = np.asarray(
         questions_embeddings, dtype=np.float32)
@@ -441,7 +442,7 @@ def vectorize_data(data, metadata):
 
 def sentence_embedding_core(metadata):
     sentences = list(metadata["sentences"])
-    split_sentences = [sen.split(vector_helper.SEPERATOR) for sen in metadata["sentences"]]
+    split_sentences = [sen.split(",") for sen in metadata["sentences"]]
     max_q_len = metadata['max_q_len']
 
     pad_sentences = pad_inputs(split_sentences, max_q_len)
@@ -449,10 +450,10 @@ def sentence_embedding_core(metadata):
     for index, sen in enumerate(pad_sentences):
         sen = sen.tolist()
         join_sen = sentences[index]
-        sen = list(map(lambda x: [x, vector_helper.PAD][x == vector_helper.NONE], sen))
+        sen = list(map(lambda x: [x, "<PAD>"][x == ""], sen))
         # print(sen)
             # sen_embedding = [ff_embedding_local(word) for word in sen]
-        sen_embedding = [vector_helper.getVector(word) for word in sen]
+        sen_embedding = [embedding_util.ft_embedding(word) for word in sen]
         sentences_embedding[join_sen] = sen_embedding
 
     #     inp_empty_embedding = [vector_helper.getVector(vector_helper.PAD) for _ in range(max_len)]
