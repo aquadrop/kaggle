@@ -35,6 +35,8 @@ import pickle
 import tensorflow as tf
 from tqdm import tqdm
 
+from sklearn.metrics import roc_auc_score
+
 import rnn.data_helper as data_helper
 from rnn.config import RNNConfig as Config
 from rnn.model import RNN_Model
@@ -53,6 +55,8 @@ def run_epoch(model, config, session, data, metadata,
     total_loss = []
     accuracy = []
     error = []
+
+    _roc_auc_scores_ = []
 
     # shuffle data
     # p = np.random.permutation(len(data[0]))
@@ -105,7 +109,7 @@ def run_epoch(model, config, session, data, metadata,
                 model.dropout_placeholder: dp}
 
         loss, pred, _ = session.run(
-            [model.loss, model.pred, train_op], feed_dict=feed)
+            [model.loss, model.predict_proba_op, train_op], feed_dict=feed)
 
         # if train_writer is not None:
         #     train_writer.add_summary(
@@ -114,44 +118,62 @@ def run_epoch(model, config, session, data, metadata,
         batch_answers = batch_size_data[2]
         batch_questions = batch_size_data[0]
 
-        # print(pred)
+        """
+        AUC score
+        http://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html#sklearn.metrics.roc_auc_score
 
-        # print(pred)
-        accuracy.append(np.sum(pred == batch_answers) /
-                        float(len(batch_answers)))
-        idx2candid = metadata['idx2candid']
-        for Q, A, P in zip(batch_questions, batch_answers, pred):
-            # print(A, P)
-            if A != P:
-                # Q = ''.join([idx2w.get(idx, '')
-                #              for idx in Q.astype(np.int32).tolist()])
-                Q = ''.join(Q)
-                Q = Q.replace(vector_helper.UNK, '')
-                A = idx2candid[A]
-                P = idx2candid[P]
-                error.append((Q, A, P))
+        >>> import numpy as np
+        >>> from sklearn.metrics import roc_auc_score
+        >>> y_true = np.array([0, 0, 1, 1])
+        >>> y_scores = np.array([0.1, 0.4, 0.35, 0.8])
+        >>> roc_auc_score(y_true, y_scores)
+        0.75
+        """
+        for i in range(len(batch_answers)):
+            try:
+                _roc_auc_score_ = roc_auc_score(batch_answers[i], pred[i])
+                _roc_auc_scores_.append(_roc_auc_score_)
+            except ValueError:
+                pass
+        # accuracy.append(np.sum(pred == batch_answers) /
+        #                 float(len(batch_answers)))
+        # idx2candid = metadata['idx2candid']
+        # for Q, A, P in zip(batch_questions, batch_answers, pred):
+        #     # print(A, P)
+        #     if A != P:
+        #         # Q = ''.join([idx2w.get(idx, '')
+        #         #              for idx in Q.astype(np.int32).tolist()])
+        #         Q = ''.join(Q)
+        #         Q = Q.replace(vector_helper.UNK, '')
+        #         A = idx2candid[A]
+        #         P = idx2candid[P]
+        #         error.append((Q, A, P))
 
         total_loss.append(loss)
         if verbose and step % verbose == 0:
-            sys.stdout.write('\r{} / {} : loss = {} --- accuracy = {}'.format(
-                step, total_steps, np.mean(total_loss), np.mean(accuracy)))
+            sys.stdout.write('\r{} / {} : loss = {} --- roc_auc = {}'.format(
+                step, total_steps, np.mean(total_loss), np.mean(_roc_auc_scores_)))
             sys.stdout.flush()
 
     if verbose:
         sys.stdout.write('\r')
 
-    return np.mean(total_loss), np.mean(accuracy), error
+    return np.mean(total_loss), np.mean(_roc_auc_scores_), error
 
 
 def train(config, restore=False):
-    train_data, valid_data, metadata = load_data(config.data_config)
+    # load info
+    with open(config.data_config["metadata_path"] + 'info.pkl', 'rb') as f:
+        info = pickle.load(f)
+    partitions = info['partitions']
     # sentences_embedding = metadata['sentences_embedding']
 
-    model = RNN_Model(config, metadata)
+    model = RNN_Model(config, info)
 
     print('==> Training RNN start\n')
-
+    # context.train_info.append("Training RNN start")
     print('==> initializing variables')
+    # context.train_info.append("initializing variables")
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
 
@@ -165,15 +187,21 @@ def train(config, restore=False):
 
         if restore:
             print('==> restoring weights')
+            # context.train_info.append("restoring weights")
             _check_restore_parameters(sess=session,
-                                      saver=saver, model_path=config.data_config["ckpt_path"] + 'rnn.weights')
+                                      saver=saver, model_path=config.data_config["ckpt_path"])
             # saver.restore(
             #     session, config.data_config["ckpt_path"] + 'rnn.weights')
 
         print('==> commence training')
+        # context.train_info.append("commence training")
+
         for epoch in range(config.max_epochs):
+            partition = epoch % partitions
+            train_data, valid_data, metadata = load_data(config.data_config, partition=partition)
             if not (epoch % config.interval_epochs == 0 and epoch > 1):
-                print('Epoch {}'.format(epoch))
+                # context.train_info.append("Epoch"+str(epoch))
+                print('Epoch {}, using partion {}'.format(epoch, partition))
                 _ = run_epoch(model=model,
                               config=config,
                               session=session,
@@ -183,7 +211,8 @@ def train(config, restore=False):
                               verbose=2,
                               display=False)
             else:
-                print('Epoch {}'.format(epoch))
+                # context.train_info.append("Epoch" + str(epoch))
+                print('Epoch {}, using partion {}'.format(epoch, partition))
                 start = time.time()
                 train_loss, train_accuracy, train_error = run_epoch(model=model,
                                                                     config=config,
@@ -204,7 +233,8 @@ def train(config, restore=False):
                 if train_accuracy > 0.99:
                     for e in train_error:
                         print(e)
-
+                # context.train_info.append("train_loss:" + str(train_loss) + "&nbsp&nbsptrain_accuracy:" + str(train_accuracy) + "&nbsp&nbsptrain_error:" + str(train_error))
+                # context.train_info.append("valid_loss:" + str(valid_loss) + "&nbsp&nbspvalid_accuracy:" + str(valid_accuracy) + "&nbsp&nbspvalid_error:" + str(valid_error))
                 print('Training loss: {}'.format(train_loss))
                 print('Validation loss: {}'.format(valid_loss))
                 print('Training accuracy: {}'.format(train_accuracy))
@@ -222,7 +252,9 @@ def train(config, restore=False):
                 print('best_train_loss: {}'.format(best_train_loss))
                 print('best_train_epoch: {}'.format(best_train_epoch))
                 print('best_train_accuracy: {}'.format(best_train_accuracy))
-
+                # context.train_info.append("best_train_loss:" + str(best_train_loss))
+                # context.train_info.append("best_train_epoch:" + str(best_train_epoch))
+                # context.train_info.append("best_train_accuracy:" + str(best_train_accuracy))
                 # anneal
                 if train_loss > prev_epoch_loss * config.anneal_threshold:
                     config.lr /= config.anneal_by
@@ -234,6 +266,7 @@ def train(config, restore=False):
                 #     break
                 print('Total time: {}'.format(time.time() - start))
         print('==> training stop')
+        # context.train_info.append("training stop")
 
 
 def replace_model_path(checkpoint_path):
@@ -244,28 +277,44 @@ def replace_model_path(checkpoint_path):
 
 
 def prepare_data(data_config):
-    metadata, data = data_helper.load_raw_data(data_config)
+    train_file_path = os.path.join(data_config['data_dir'], 'train.csv')
+    num_train_lines = sum(1 for _ in open(train_file_path))
+    max_scan = data_config['max_scan_lines']
+    partitions = int(num_train_lines / max_scan) + 1
+    print('num of train lines is {}, {} partitions will be produced..'.format(num_train_lines, partitions))
+    info = dict()
+    for i in range(partitions):
+        metadata, data = data_helper.load_raw_data(data_config, i, partitions)
 
-    with open(data_config["metadata_path"], 'wb') as f:
-        pickle.dump(metadata, f)
-    with open(data_config["data_path"], 'wb') as f:
-        pickle.dump(data, f)
+        with open(data_config["metadata_path"] + 'metadata_partition_' + str(i) + ".pkl", 'wb') as f:
+            pickle.dump(metadata, f)
+        with open(data_config["data_path"] + 'data_partition_' + str(i) + ".pkl", 'wb') as f:
+            pickle.dump(data, f)
+
+        info["candidate_size"] = metadata['candidate_size']
+        info['candid2idx'] = metadata['candid2idx']
+        info['candid2idx'] = metadata['idx2candid']
+    info["partitions"] = partitions
+    with open(data_config["metadata_path"] + 'info.pkl', 'wb') as f:
+        pickle.dump(info, f)
 
 
-def load_data(data_config):
+def load_data(data_config, partition):
     """Loads metadata and data"""
-    with open(data_config["metadata_path"], 'rb') as f:
+    with open(data_config["metadata_path"] + 'metadata_partition_' + str(partition) + ".pkl", 'rb') as f:
         metadata = pickle.load(f)
 
-    with open(data_config["data_path"], 'rb') as f:
+    with open(data_config["data_path"] + 'data_partition_' + str(partition) + ".pkl", 'rb') as f:
         data = pickle.load(f)
     train = data['train']
     valid = data['valid']
 
     # embedding
     print('pre embedding')
+    # context.train_info.append('pre embedding')
     sentences_embedding = data_helper.sentence_embedding(metadata)
     print('pre embedding done')
+    # context.train_info.append('pre embedding done')
     # metadata['max_q_len'] = max_len
     # metadata['max_sen_len'] = max_len
     metadata['sentences_embedding'] = sentences_embedding

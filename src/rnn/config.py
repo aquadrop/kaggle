@@ -37,9 +37,9 @@ class RNNConfig(object):
             self.hidden_layer_num = 2
             self.keep_prob = 1
             self.lr_decay = 1
-            self.batch_size = 64
+            self.batch_size = 16
             self.max_epochs = 3456
-            self.interval_epochs = 5
+            self.interval_epochs = 1
             self.dropout = 1
             self.lr = 0.001
             self.l2 = 0.001
@@ -57,13 +57,14 @@ class RNNConfig(object):
                 os.path.dirname(os.path.abspath(__file__))))
 
             self.data_config = dict()
-            self.data_config["data_dir"] = '/opt/luis/kaggle/toxic/data/'
+            self.data_config["data_dir"] = '/opt/luis/toxic/data/train/automata/'
             self.data_config["candid_path"] = os.path.join(
                 prefix, 'data/rnn/train/automata/candidates.txt')
 
-            self.data_config["metadata_path"] = '/opt/luis/kaggle/toxic/model/rnn/rnn_preprocessed/metadata.pkl'
-            self.data_config["data_path"] = '/opt/luis/kaggle/toxic/model/rnn/rnn_preprocessed/data.pkl'
-            self.data_config["ckpt_path"] = '/opt/luis/kaggle/toxic/model/rnn/ckpt/'
+            self.data_config["metadata_path"] = '/opt/luis/toxic/model/rnn/rnn_processed/'
+            self.data_config["data_path"] = '/opt/luis/toxic/model/rnn/rnn_processed/'
+            self.data_config["ckpt_path"] = '/opt/luis/toxic/model/rnn/ckpt/'
+            self.data_config['max_scan_lines'] = 10000
         else:
             self.hidden_neural_size = config_dict["hidden_neural_size"]
             self.embed_dim = config_dict["embed_dim"]
@@ -96,3 +97,4 @@ class RNNConfig(object):
             self.data_config["metadata_path"] = config_dict["data_metadata_path"]
             # self.data_config["data_path"] = config_dict["data_path"]
             self.data_config["ckpt_path"] = config_dict["data_ckpt_path"]
+            self.data_config['max_scan_lines'] = 1000

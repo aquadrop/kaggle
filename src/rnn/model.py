@@ -32,19 +32,19 @@ def _add_gradient_noise(t, stddev=1e-3, name=None):
 
 class RNN_Model(object):
 
-    def __init__(self, config, metadata, is_training=True):
+    def __init__(self, config, info, is_training=True):
 
         self.keep_prob = config.keep_prob
         self.batch_size = config.batch_size
 
-        self.max_sequence_len = metadata["max_q_len"]
+        # self.max_sequence_len = metadata["max_q_len"]
         self.embed_dim = config.embed_dim
 
 
         self.hidden_neural_size=config.hidden_neural_size
         self.hidden_layer_num=config.hidden_layer_num
 
-        self.num_classes = metadata["candidate_size"]
+        self.num_classes = info["candidate_size"]
         self.is_training = is_training
         self.max_grad_norm = 10
         self.config = config
@@ -66,13 +66,12 @@ class RNN_Model(object):
         # self.embedding_placeholder = tf.placeholder(tf.float32,
         #                                             [None, self.max_sequence_len, self.embed_dim],
         #                                             name="embedding")
-        # self.target_placeholder = tf.placeholder(tf.int64,
-        #                                          (None,), name='target')
-        self.target_placeholder = tf.placeholder(tf.float32, [None, self.num_classes], name="input_y")
+        self.target_placeholder = tf.placeholder(tf.float32,
+                                                 (None, self.num_classes), name='target')
         # self.mask_placeholder = tf.placeholder(tf.float32, [self.max_sequence_len, None], name="mask")
 
         self.question_placeholder = tf.placeholder(
-            tf.float32, shape=(None, self.max_sequence_len, self.embed_dim), name='questions')
+            tf.float32, shape=(None, None, self.embed_dim), name='questions')
         # self.question_placeholder = tf.placeholder(
         #         tf.float32, shape=(None, None, None), name='questions')
         self.question_len_placeholder = tf.placeholder(
@@ -109,11 +108,11 @@ class RNN_Model(object):
             self.softmax_w = tf.get_variable("softmax_w", [self.hidden_neural_size, self.num_classes], dtype=tf.float32, initializer=self.initializer)
             self.softmax_b = tf.get_variable("softmax_b", [self.num_classes], dtype=tf.float32)
             self.output_rnn_last = tf.reduce_mean(outputs, axis=1)
-            # self.logits = tf.matmul(self.output_rnn_last,
-            #                    self.softmax_w) + self.softmax_b
+            self.logits = tf.matmul(self.output_rnn_last,
+                               self.softmax_w) + self.softmax_b
             # self.logits = tf.matmul(out_put,softmax_w)
             # self.logits = tf.add(self.logits, softmax_b, name='scores')
-            self.logits = tf.nn.xw_plus_b(self.output_rnn_last, self.softmax_w, self.softmax_b, name="scores")
+            # self.logits = tf.nn.xw_plus_b(q_vec, softmax_w, softmax_b, name="scores")
             # rnn_output = tf.nn.dropout(q_vec, self.dropout_placeholder)
             #
             # o = tf.layers.dense(rnn_output,
@@ -133,8 +132,8 @@ class RNN_Model(object):
             # self.loss = tf.nn.softmax_cross_entropy_with_logits(
             #     labels=self.target_placeholder, logits=self.logits + 1e-10)
             # self.loss = tf.reduce_mean(self.loss)
-            self.loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.target_placeholder, logits=self.logits)
-            self.loss = tf.reduce_sum(self.loss) + gate_loss
+            self.loss = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.logits, labels=self.target_placeholder)) + gate_loss
 
     def _create_train_op(self):
 
@@ -169,10 +168,3 @@ class RNN_Model(object):
         pred, prob_top = sess.run(
                 [self.pred, self.predict_proba_top_op], feed_dict=feed)
         return pred, prob_top
-
-        # probs, state = sess.run([self.probs, self.final_state], feed_dict=feed)
-
-        # results = np.argmax(probs, 1)
-        # id2labels = dict(zip(labels.values(), labels.keys()))
-        # labels = map(id2labels.get, results)
-        # return labels

@@ -1,0 +1,4 @@
+GitRepositoriesView.GitDirectories=/home/deep/projects/contest/kaggle/.git\:/home/deep/projects/contest/leetcode/.git\:
+GitRepositoriesView.GitDirectories.relative=.git\:/home/deep/projects/contest/leetcode/.git\:
+core_autoIgnoreDerivedResources=false
+eclipse.preferences.version=1

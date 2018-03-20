@@ -20,8 +20,8 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 
-# import utils.embedding.vector_helper as vector_helper
-import utils.embedding.embedding_util as embedding_util
+import utils.embedding.vector_helper as vector_helper
+from utils.embedding.vector_helper import BenebotVector as VectorHelper
 import utils.query_util as query_util
 
 # file path
@@ -230,7 +230,7 @@ def convert(data_path):
         with open(path,'w') as f:
             f.write('reserved_' + str(i))
 
-def load_candidates(candidates_f):
+def load_candidates():
     candidates = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
     candid2idx = {"toxic":0, "severe_toxic":1, "obscene":2, "threat":3, "insult":4, "identity_hate":5}
     idx2candid = {0:"toxic", 1:"severe_toxic", 2:"obscene", 3:"threat", 4:"insult", 5:"identity_hate"}
@@ -243,19 +243,19 @@ def load_candidates(candidates_f):
     return candidates, candid2idx, idx2candid
 
 
-def load_dialog(sentences, data_dir, candid_dic, char):
+def load_dialog(sentences, data_dir, partition, partitions):
     train_file = os.path.join(data_dir, 'train.csv')
     # test_file = os.path.join(data_dir, 'test.txt')
     # val_file = os.path.join(data_dir, 'val.txt')
 
-    all_data = get_dialogs(sentences, train_file, candid_dic, char)
+    all_data = get_dialogs(sentences, partition, partitions)
     train_data = all_data[0: int(0.8 * len(all_data))]
-    test_data = all_data[int(0.8 * len(all_data)):]
+    # test_data = all_data[int(0.8 * len(all_data)):]
     val_data = all_data[int(0.8 * len(all_data)):]
-    return train_data, test_data, val_data
+    return train_data, val_data
 
 
-def get_dialogs(sentences, f, candid_dic,  char=1):
+def get_dialogs(sentences, partition, partitions):
     """
 
     Given a file name, read the file, retrieve the dialogs, and then convert the sentences into a single dialog.
@@ -268,10 +268,10 @@ def get_dialogs(sentences, f, candid_dic,  char=1):
     :return:
     """
 
-    return parse_dialogs_per_response(sentences, f, candid_dic, char)
+    return parse_dialogs_per_response(sentences, partition, partitions)
 
 
-def parse_dialogs_per_response(sentences, f, candid_dic, char=1, plain=False):
+def parse_dialogs_per_response(sentences, partition, partitions):
     """
         Parse dialogs provided in the babi tasks format
     :param sentences:
@@ -284,10 +284,20 @@ def parse_dialogs_per_response(sentences, f, candid_dic, char=1, plain=False):
     data = []
     context = []
 
-    df = pd.read_csv('/opt/luis/kaggle/toxic/data/train.csv',
+    df = pd.read_csv('/opt/luis/toxic/data/train/automata/train.csv',
                      names=["id","comment_text","toxic", "severe_toxic",
                             "obscene", "threat",
                             "insult", "identity_hate"], skiprows=1)
+    from tqdm import tqdm
+    rows = df.shape[0]
+    fr = float(partition) / partitions * rows
+    to = float(partition + 1) / partitions * rows
+    fr = int(fr)
+    to = int(to)
+    df = pd.read_csv('/opt/luis/toxic/data/train/automata/train.csv',
+                     names=["id", "comment_text", "toxic", "severe_toxic",
+                            "obscene", "threat",
+                            "insult", "identity_hate"], skiprows=1 + fr, nrows=to - fr)
     # print(candid_dic)
     for index, row in df.iterrows():
 
@@ -300,7 +310,7 @@ def parse_dialogs_per_response(sentences, f, candid_dic, char=1, plain=False):
         _id_ = row['id']
         u = query_util.tokenize(u, char=8)
         # r = query_util.tokenize(r, char=char)
-        sentences.add(",".join(u))
+        sentences.append(u)
         # sentences.add(vector_helper.SEPERATOR.join(r))
 
         # print(u)
@@ -309,7 +319,7 @@ def parse_dialogs_per_response(sentences, f, candid_dic, char=1, plain=False):
         data.append((context[:], u[:], a))
 
     # print(data)
-    sentences.add("<PAD>")
+    sentences.append(["<PAD>"])
     # sentences.add(vector_helper.PAD)
     random.shuffle(data)
     return data
@@ -339,19 +349,17 @@ def get_lens(inputs, split_sentences=False):
     return lens
 
 
-def load_raw_data(config):
-    print('Load raw data.....')
-    candidates, candid2idx, idx2candid = load_candidates(
-        candidates_f=config["candid_path"])
+def load_raw_data(config, partition, partitions):
+    print('Load raw data.....partition {} of {}'.format(partition, partitions))
+    candidates, candid2idx, idx2candid = load_candidates()
     candidate_size = len(candidates)
 
-    char = 2
-    sentences = set()
-    train_data, test_data, val_data = load_dialog(sentences,
+    sentences = list()
+    train_data, val_data = load_dialog(sentences,
                                                   data_dir=config["data_dir"],
-                                                  candid_dic=candid2idx,  char=char)
+                                                  partition=partition,
+                                                  partitions=partitions)
     total_data = train_data
-    # total_data += test_data
     total_data += val_data
 
     # inputs = []
@@ -366,7 +374,7 @@ def load_raw_data(config):
         #     inp = [[config.EMPTY]]
         # inputs.append(inp)
         if len(question) == 0:
-            question = ["<PAD>"]
+            question = [vector_helper.EMPTY]
         questions.append(question)
         answers.append(answer)
         # relevant_labels.append([0])
@@ -385,11 +393,9 @@ def load_raw_data(config):
 
     answers = np.stack(answers)
 
-
     num_train = int(len(questions) * 0.8)
-    train = questions[:num_train], q_lens[:num_train],answers[:num_train]
-    valid = questions[num_train:],q_lens[num_train:],answers[num_train:]
-
+    train = questions[:num_train], q_lens[:num_train], answers[:num_train]
+    valid = questions[num_train:], q_lens[num_train:], answers[num_train:]
 
     w2idx = None
     idx2w = None
@@ -416,6 +422,7 @@ def load_raw_data(config):
 
 
 def pad_inputs(inputs, max_len):
+    # print(max_len, max([len(inputs[i]) for i in range(len(inputs))]))
     padded = [np.pad(inp, (0, max_len - len(inputs[i])),
                      'constant', constant_values=0) for i, inp in enumerate(inputs)]
     # print(padded)
@@ -441,20 +448,25 @@ def vectorize_data(data, metadata):
 
 
 def sentence_embedding_core(metadata):
-    sentences = list(metadata["sentences"])
-    split_sentences = [sen.split(",") for sen in metadata["sentences"]]
-    max_q_len = metadata['max_q_len']
+    vector_helper = VectorHelper()
 
+    sentences = list(metadata["sentences"])
+    split_sentences = [sen for sen in metadata["sentences"]]
+    max_q_len = metadata['max_q_len']
+    # print(max_q_len)
     pad_sentences = pad_inputs(split_sentences, max_q_len)
     sentences_embedding = OrderedDict()
-    for index, sen in enumerate(pad_sentences):
+    lens = len(pad_sentences)
+    from tqdm import tqdm
+    for index in tqdm(range(lens)):
+        sen = pad_sentences[index]
         sen = sen.tolist()
         join_sen = sentences[index]
         sen = list(map(lambda x: [x, "<PAD>"][x == ""], sen))
         # print(sen)
             # sen_embedding = [ff_embedding_local(word) for word in sen]
-        sen_embedding = [embedding_util.ft_embedding(word) for word in sen]
-        sentences_embedding[join_sen] = sen_embedding
+        sen_embedding = [vector_helper.getVector(word) for word in sen]
+        sentences_embedding[",".join(join_sen)] = sen_embedding
 
     #     inp_empty_embedding = [vector_helper.getVector(vector_helper.PAD) for _ in range(max_len)]
     #

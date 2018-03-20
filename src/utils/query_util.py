@@ -290,6 +290,6 @@ if __name__ == "__main__":
     # print(rule_base_num_retreive('50寸电视'))
     # print(rule_base_num_retreive('哪点事三人3000,高4米iphone6s, 大一匹'))
     print(tokenize("Explanation Why the edits made under my username Hardcore Metallica Fan were reverted? They weren't vandalisms, just closure on some GAs after I voted at New York Dolls FAC. And please don't remove the template from the talk page since I'm retired now.89.205.38.27"
-, char=2))
+, char=8))
     # print(rule_base_num_retreive(''))
     # build_dmn_vocab()
