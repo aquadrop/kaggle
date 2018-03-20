@@ -353,8 +353,22 @@ def parse_args(args):
     return args
 
 
-def inference(config):
-    pass
+def infer(config):
+    import pandas as pd
+    df = pd.read_csv('/opt/luis/toxic/data/train/automata/train.csv',
+                     names=["id", "comment_text", "toxic", "severe_toxic",
+                            "obscene", "threat",
+                            "insult", "identity_hate"], skiprows=1)
+    from tqdm import tqdm
+    import utils.query_util as query_util
+    from utils.embedding.vector_helper import BenebotVector as VectorHelper
+    vector_helper = VectorHelper()
+    for index, row in df.iterrows():
+        u = row['comment_text']
+        _id_ = row['id']
+        u = query_util.tokenize(u, char=8)
+        u_embedding = [vector_helper.getVector(word) for word in u]
+
 
 def main(args):
     args = parse_args(args)
@@ -370,8 +384,8 @@ def main(args):
         sys.exit()
     elif args['train']:
         train(config, args['restore'])
-    elif args['inference']:
-        inference(config)
+    elif args['infer']:
+        infer(config)
     else:
         print('ERROR:Unknow Mode')
 

@@ -122,7 +122,7 @@ class RNN_Model(object):
 
             self.predict_proba_op = tf.nn.softmax(self.logits,name='predict_proba_op')
             self.predict_proba_top_op = tf.nn.top_k(
-                    self.predict_proba_op, k=self.config.top_k, name='top_predict_proba_op')
+                    self.predict_proba_op, k=6, name='top_predict_proba_op')
             self.pred = tf.argmax(self.predict_proba_op, 1, name='pred')
 
 
@@ -166,5 +166,5 @@ class RNN_Model(object):
             self.dropout_placeholder     : dropout
         }
         pred, prob_top = sess.run(
-                [self.pred, self.predict_proba_top_op], feed_dict=feed)
+                [self.pred, self.predict_proba_op], feed_dict=feed)
         return pred, prob_top
